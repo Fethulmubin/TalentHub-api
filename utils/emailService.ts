@@ -77,7 +77,7 @@ const sendOTP = async (toEmail, name,  otp) => {
     <div class="header">
       <!-- Optional: Your logo -->
       <img src="https://yourdomain.com/logo.png" alt="Logo" />
-      <h2>Welcome to Darul Hijretien!</h2>
+      <h2>Welcome to TalentHub!</h2>
     </div>
     <div class="content">
       <p>Hi <strong>${name}</strong>,</p>
