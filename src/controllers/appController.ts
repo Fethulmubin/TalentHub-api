@@ -115,3 +115,34 @@ export async function getApplicationsByJob(req, res) {
       .json({ status: false, message: "Internal server error" });
   }
 }
+
+// changing the status of application
+export async function changeStatus(req, res) {
+  const { appId } = req.params;
+  const { status } = req.body;
+
+
+  try {
+     const app = await prisma.application.findUnique({
+      where: { id: appId },
+      include: { job: true },
+    });
+
+    if (!app) {
+      return res.status(404).json({ status: false, message: "Application not found" });
+    }
+
+    if (req.user.id !== app.job.createdById && req.user.role !== "EMPLOYER") {
+      return res.status(403).json({ status: false, message: "Forbidden" });
+    }
+
+    const updated = await prisma.application.update({
+      where: {id: appId},
+      data: { status },
+    })
+    return res.json({ status: true, message: "Status updated", application: updated });
+  } catch (error) {
+    console.error("Error updating application status:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+}
