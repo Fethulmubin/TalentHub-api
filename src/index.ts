@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import dotenv from "dotenv";
 import cookieParser  from 'cookie-parser';
 import jobsRouter from './routes/jobRoute';
+import appRoute from './routes/appRoute';
 dotenv.config();
 
 const prisma = new PrismaClient();
@@ -21,6 +22,7 @@ app.use(express.json())
 
 app.use('/users', userRoute);
 app.use('/jobs', jobsRouter);
+app.use("/applications", appRoute);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
