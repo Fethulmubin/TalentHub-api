@@ -16,9 +16,9 @@ const generateToken = (user) => {
 // Cookie options
 const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production" ? true : false, // only HTTPS in prod
-  sameSite: "strict",
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  secure: false, // true if https
+  sameSite: "lax", // allow cross-site cookies
+  maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
 // ---------------- Signup ----------------
