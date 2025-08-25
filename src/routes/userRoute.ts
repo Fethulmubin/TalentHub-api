@@ -1,5 +1,5 @@
 import express from 'express';
-import { Signup, Login, VerifyOTP } from '../controllers/userController';
+import { Signup, Login, VerifyOTP, Logout } from '../controllers/userController';
 import { body, validationResult } from 'express-validator';
 import { validateLogin, validateSignup } from '../middleware/InputValidator';
 import { validateRequest } from '../middleware/validatorMiddleware';
@@ -10,5 +10,6 @@ const userRoute = express.Router();
 userRoute.post('/register', validateSignup, validateRequest , Signup);
 userRoute.post('/login',validateLogin, validateRequest,  Login);
 userRoute.post('/verify', VerifyOTP);
+userRoute.post('/logout', Logout);
 
 export default userRoute;

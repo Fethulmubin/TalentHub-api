@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 
 export const authMiddleware = (roles = []) => {
   return (req, res, next) => {
-
+    // console.log(req.cookies)
     const token = req.cookies?.token;
     // console.log(token)
     if (!token) {
