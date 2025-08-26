@@ -20,6 +20,8 @@ app.use(cors({
   origin: "https://talent-hub-front-cckb.vercel.app",
   credentials: true,   // allow cookies
 }));
+app.set("trust proxy", 1);
+
 app.use(cookieParser());
 app.use(express.json())
  //routes
