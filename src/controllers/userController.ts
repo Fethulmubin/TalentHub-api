@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import prisma from "../../utils/prismaClient";
 import redis  from "../../utils/redisClient";
 import { sendOTP } from "../../utils/emailService";
+import path from "path";
 
 // helper for token
 const generateToken = (user) => {
@@ -26,6 +27,7 @@ const cookieOptions = {
   secure: true,           // must be true if your site uses HTTPS
   sameSite: "none",       // allows cross-site cookies in production
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  path: '/',
 };
 
 
