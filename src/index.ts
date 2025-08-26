@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 3500
 
 
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin: "https://talent-hub-front-cckb.vercel.app",
   credentials: true,   // allow cookies
 }));
 app.use(cookieParser());

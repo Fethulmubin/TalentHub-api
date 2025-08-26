@@ -13,13 +13,22 @@ const generateToken = (user) => {
   );
 };
 
-// Cookie options
+// Cookie options for development
+// const cookieOptions = {
+//   httpOnly: true,
+//   secure: false, // true if https
+//   sameSite: "lax", // allow cross-site cookies
+//   maxAge: 7 * 24 * 60 * 60 * 1000,
+// };
+// Cookie options for production
 const cookieOptions = {
   httpOnly: true,
-  secure: false, // true if https
-  sameSite: "lax", // allow cross-site cookies
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+  secure: true,           // must be true if your site uses HTTPS
+  sameSite: "none",       // allows cross-site cookies in production
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
+
+
 
 // ---------------- Signup ----------------
 const Signup = async (req, res) => {
