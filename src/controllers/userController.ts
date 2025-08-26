@@ -97,6 +97,7 @@ const Login = async (req, res) => {
         email: existingUser.email,
         role: existingUser.role,
       },
+      token
     });
   } catch (error) {
     console.error("Error logging in:", error);
@@ -141,6 +142,7 @@ if (otpInput !== otp) {
       status: true,
       message: "Account created successfully",
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      token
     });
   } catch (error) {
     console.error("Error verifying OTP:", error);
