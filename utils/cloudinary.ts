@@ -14,7 +14,7 @@ export const storage = new CloudinaryStorage({
     return {
       folder: "resumes",
       resource_type: "raw",  // PDFs need raw
-      format: "pdf",
+      type: "upload",  
       public_id: `${Date.now()}-${file.originalname.split(".")[0]}`
     };
   },

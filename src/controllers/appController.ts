@@ -13,7 +13,7 @@ export async function getApplicationsByUser(req, res) {
       where: { userId },
       include: {
         job: {
-          select: { id: true, title: true, description: true, createdAt: true },
+          select: { id: true, title: true, price: true, createdBy: true, createdAt: true },
         },
       },
       orderBy: { createdAt: "desc" },
