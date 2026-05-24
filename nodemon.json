@@ -1,7 +1,6 @@
 {
-    "watch": ["src"],
-    "ext": "ts",
-    "ignore": ["dist"],
-    "exec": "ts-node src/index.ts"
-  }
-  
+  "watch": ["modules", "shared", "services", "workers", "websocket", "index.ts"],
+  "ext": "ts",
+  "ignore": ["dist"],
+  "exec": "ts-node --files index.ts"
+}
