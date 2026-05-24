@@ -1,18 +1,15 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client-js"
- output   = "../node_modules/.prisma/client"
+  provider        = "prisma-client-js"
+  output          = "../node_modules/.prisma/client"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
+
 enum Role {
   APPLICANT
   EMPLOYER
@@ -23,6 +20,7 @@ enum AppStatus {
   SHORTLISTED
   REJECTED
 }
+
 model Skill {
   id    String  @id @default(uuid())
   name  String  @unique
@@ -31,26 +29,27 @@ model Skill {
 }
 
 model User {
-  id        String   @id @default(uuid())
+  id        String           @id @default(uuid())
   name      String
-  email     String   @unique
+  email     String           @unique
   password  String
-  role      Role     @default(APPLICANT)
-  jobs      Job[]    @relation("UserJobs")
+  role      Role             @default(APPLICANT)
+  jobs      Job[]            @relation("UserJobs")
   apps      Application[]
-  skills       Skill[]  @relation("UserSkills")
-  createdAt DateTime @default(now())
+  skills    Skill[]          @relation("UserSkills")
+  resumes   ResumeProfile[]
+  createdAt DateTime         @default(now())
 }
 
 model Job {
   id           String        @id @default(uuid())
   title        String
   description  String
-  price        Float? 
+  price        Float?
   createdById  String
   createdBy    User          @relation("UserJobs", fields: [createdById], references: [id])
   applications Application[]
-  skills       Skill[]       @relation("JobSkills")  // relation to required skills
+  skills       Skill[]       @relation("JobSkills")
   createdAt    DateTime      @default(now())
 }
 
@@ -65,5 +64,59 @@ model Application {
   job  Job  @relation(fields: [jobId], references: [id])
   user User @relation(fields: [userId], references: [id])
 
-  @@unique([jobId, userId]) // prevent duplicate applications
+  @@unique([jobId, userId])
+}
+
+model ResumeProfile {
+  id              String             @id @default(uuid())
+  userId          String?
+  fileName        String
+  fileUrl         String
+  rawText         String
+  skills          String[]           @default([])
+  education       Json?              @default("[]")
+  yearsExperience Float?
+  technologies    String[]           @default([])
+  projects        Json?              @default("[]")
+  summary         String?
+  status          String             @default("PROCESSING")
+  errorMessage    String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user        User?              @relation(fields: [userId], references: [id])
+  embeddings  ResumeEmbedding[]
+  insights    CandidateInsight[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model ResumeEmbedding {
+  id         String   @id @default(uuid())
+  resumeId   String
+  chunkIndex Int
+  chunkText  String
+  embedding  Unsupported("vector(384)")?
+  createdAt  DateTime @default(now())
+
+  resume ResumeProfile @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+}
+
+model CandidateInsight {
+  id          String   @id @default(uuid())
+  resumeId    String
+  insightType String
+  label       String
+  value       String
+  confidence  Float
+  evidence    String
+  createdAt   DateTime @default(now())
+
+  resume ResumeProfile @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+  @@index([insightType])
 }
