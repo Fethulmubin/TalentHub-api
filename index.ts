@@ -11,6 +11,7 @@ import jobsRoutes from "./modules/jobs/jobs.routes";
 import appRoutes from "./modules/applications/applications.routes";
 import resumeRoutes from "./modules/resume/resume.routes";
 import chatbotRoutes from "./modules/chatbot/chatbot.routes";
+import matchingRoutes from "./modules/matching/matching.routes";
 
 import { initializeSocket } from "./websocket/socket";
 import { startWorkers } from "./workers/processors";
@@ -33,6 +34,7 @@ app.use("/jobs", jobsRoutes);
 app.use("/applications", appRoutes);
 app.use("/resume", resumeRoutes);
 app.use("/chat", chatbotRoutes);
+app.use("/matching", matchingRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: true, message: "TalentHub API is running" });

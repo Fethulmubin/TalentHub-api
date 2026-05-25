@@ -8,6 +8,7 @@ export enum Events {
   APPLICATION_STATUS_UPDATED = "application.status.updated",
   RESUME_UPLOADED = "resume.uploaded",
   RESUME_PROCESSED = "resume.processed",
+  MATCH_COMPUTED = "match.computed",
 }
 
 export interface UserRegisteredPayload {
@@ -57,6 +58,16 @@ export interface ResumeProcessedPayload {
   yearsExperience: number | null;
 }
 
+export interface MatchComputedPayload {
+  jobId: string;
+  applicationId: string;
+  userId: string;
+  overallScore: number;
+  confidence: number;
+  strengths: string[];
+  gaps: string[];
+}
+
 type EventPayloads = {
   [Events.USER_REGISTERED]: UserRegisteredPayload;
   [Events.USER_VERIFIED]: UserVerifiedPayload;
@@ -65,6 +76,7 @@ type EventPayloads = {
   [Events.APPLICATION_STATUS_UPDATED]: ApplicationStatusUpdatedPayload;
   [Events.RESUME_UPLOADED]: ResumeUploadedPayload;
   [Events.RESUME_PROCESSED]: ResumeProcessedPayload;
+  [Events.MATCH_COMPUTED]: MatchComputedPayload;
 };
 
 class TypedEventEmitter {

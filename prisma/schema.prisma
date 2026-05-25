@@ -29,40 +29,46 @@ model Skill {
 }
 
 model User {
-  id        String           @id @default(uuid())
-  name      String
-  email     String           @unique
-  password  String
-  role      Role             @default(APPLICANT)
-  jobs      Job[]            @relation("UserJobs")
-  apps      Application[]
-  skills    Skill[]          @relation("UserSkills")
-  resumes   ResumeProfile[]
-  createdAt DateTime         @default(now())
+  id              String           @id @default(uuid())
+  name            String
+  email           String           @unique
+  password        String
+  role            Role             @default(APPLICANT)
+  jobs            Job[]            @relation("UserJobs")
+  apps            Application[]
+  skills          Skill[]          @relation("UserSkills")
+  resumes         ResumeProfile[]
+  gitHubProfile   GitHubProfile?
+  candidateMatches CandidateMatch[]
+  createdAt       DateTime         @default(now())
 }
 
 model Job {
-  id           String        @id @default(uuid())
-  title        String
-  description  String
-  price        Float?
-  createdById  String
-  createdBy    User          @relation("UserJobs", fields: [createdById], references: [id])
-  applications Application[]
-  skills       Skill[]       @relation("JobSkills")
-  createdAt    DateTime      @default(now())
+  id              String            @id @default(uuid())
+  title           String
+  description     String
+  price           Float?
+  createdById     String
+  createdBy       User              @relation("UserJobs", fields: [createdById], references: [id])
+  applications    Application[]
+  skills          Skill[]           @relation("JobSkills")
+  candidateMatches CandidateMatch[]
+  createdAt       DateTime          @default(now())
 }
 
 model Application {
-  id        String    @id @default(uuid())
-  jobId     String
-  userId    String
-  status    AppStatus @default(APPLIED)
-  resumeUrl String?
-  createdAt DateTime  @default(now())
+  id              String            @id @default(uuid())
+  jobId           String
+  userId          String
+  status          AppStatus         @default(APPLIED)
+  resumeUrl       String?
+  createdAt       DateTime          @default(now())
 
-  job  Job  @relation(fields: [jobId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  job             Job               @relation(fields: [jobId], references: [id])
+  user            User              @relation(fields: [userId], references: [id])
+  interviewScore  InterviewScore?
+  behavioralScore BehavioralScore?
+  candidateMatch  CandidateMatch?
 
   @@unique([jobId, userId])
 }
@@ -119,4 +125,87 @@ model CandidateInsight {
 
   @@index([resumeId])
   @@index([insightType])
+}
+
+model InterviewScore {
+  id                String   @id @default(uuid())
+  applicationId     String   @unique
+  communication     Float    @default(0)
+  problemSolving    Float    @default(0)
+  technicalDepth    Float    @default(0)
+  culturalFit       Float    @default(0)
+  overallScore      Float    @default(0)
+  notes             String?
+  interviewedAt     DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model GitHubProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  username         String
+  avatarUrl        String?
+  bio              String?
+  publicRepos      Int      @default(0)
+  followers        Int      @default(0)
+  following        Int      @default(0)
+  contributions    Int      @default(0)
+  languages        String[] @default([])
+  topRepos         Json?    @default("[]")
+  lastSyncAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model BehavioralScore {
+  id                String   @id @default(uuid())
+  applicationId     String   @unique
+  adaptability      Float    @default(0)
+  collaboration     Float    @default(0)
+  initiative        Float    @default(0)
+  communication     Float    @default(0)
+  overallScore      Float    @default(0)
+  notes             String?
+  assessedAt        DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model CandidateMatch {
+  id              String   @id @default(uuid())
+  jobId           String
+  applicationId   String   @unique
+  userId          String
+  overallScore    Float    @default(0)
+  resumeScore     Float    @default(0)
+  interviewScore  Float    @default(0)
+  githubScore     Float    @default(0)
+  behaviorScore   Float    @default(0)
+  confidence      Float    @default(0)
+  strengths       Json     @default("[]")
+  gaps            Json     @default("[]")
+  explanation     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  job         Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@index([jobId])
+  @@index([userId])
+  @@index([overallScore])
 }
