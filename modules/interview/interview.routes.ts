@@ -12,5 +12,6 @@ router.post("/sessions/:sessionId/start", authenticate(), controller.startSessio
 router.post("/sessions/:sessionId/submit", authenticate(), controller.submitCode);
 router.post("/sessions/:sessionId/voice", authenticate(), controller.submitVoice);
 router.post("/sessions/:sessionId/evaluate", authenticate(), controller.finalizeEvaluation);
+router.post("/sessions/:sessionId/chat", authenticate(), controller.chat);
 
 export default router;

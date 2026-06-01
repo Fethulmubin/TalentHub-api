@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as interviewService from "./interview.service";
+import { chatCompletion, getCodeFeedback, answerChatQuestion } from "../../services/ai/openrouter.service";
 
 export const createSession = async (req: Request, res: Response) => {
   const { applicationId, language, timeLimit } = req.body;
@@ -70,4 +71,30 @@ export const finalizeEvaluation = async (req: Request, res: Response) => {
   const sessionId = req.params.sessionId as string;
   const result = await interviewService.finalizeEvaluation(sessionId);
   res.json(result);
+};
+
+export const chat = async (req: Request, res: Response) => {
+  const { message, code, codingPrompt } = req.body;
+  const sessionId = req.params.sessionId as string;
+
+  if (!message) {
+    res.status(400).json({ status: false, message: "message is required" });
+    return;
+  }
+
+  try {
+    let response: string;
+    if (code) {
+      response = await getCodeFeedback(code, req.body.language || "javascript", codingPrompt);
+    } else {
+      const session = await interviewService.getSession(sessionId);
+      const phase = session.status && "session" in session ? (session.session as any)?.phase : undefined;
+      const prompt = session.status && "session" in session ? (session.session as any)?.codingPrompt : undefined;
+      response = await answerChatQuestion(message, { phase, codingPrompt: prompt || codingPrompt });
+    }
+
+    res.json({ status: true, response });
+  } catch (err: any) {
+    res.status(500).json({ status: false, message: err.message || "AI request failed" });
+  }
 };
