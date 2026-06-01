@@ -1,6 +1,7 @@
 import { createWorker, QueueNames } from "../queue";
 import { processEmailJob } from "./email.processor";
 import { processResumeJob } from "./resume.processor";
+import { processInterviewJob } from "./interview.processor";
 import logger from "../../shared/logger/logger";
 
 let workers: ReturnType<typeof createWorker>[] = [];
@@ -11,6 +12,9 @@ export const startWorkers = (): void => {
 
   const resumeWorker = createWorker(QueueNames.RESUME_PROCESSING, processResumeJob, 2);
   workers.push(resumeWorker);
+
+  const interviewWorker = createWorker(QueueNames.INTERVIEW, processInterviewJob, 3);
+  workers.push(interviewWorker);
 
   logger.info("BullMQ workers started", { count: workers.length });
 };

@@ -12,6 +12,7 @@ import appRoutes from "./modules/applications/applications.routes";
 import resumeRoutes from "./modules/resume/resume.routes";
 import chatbotRoutes from "./modules/chatbot/chatbot.routes";
 import matchingRoutes from "./modules/matching/matching.routes";
+import interviewRoutes from "./modules/interview/interview.routes";
 
 import { initializeSocket } from "./websocket/socket";
 import { startWorkers } from "./workers/processors";
@@ -35,6 +36,7 @@ app.use("/applications", appRoutes);
 app.use("/resume", resumeRoutes);
 app.use("/chat", chatbotRoutes);
 app.use("/matching", matchingRoutes);
+app.use("/interview", interviewRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: true, message: "TalentHub API is running" });
@@ -58,6 +60,31 @@ eventBus.on(Events.JOB_CREATED, (payload) => {
   emitToAll("job:new", {
     jobId: payload.jobId,
     title: payload.title,
+  });
+});
+
+eventBus.on(Events.INTERVIEW_STARTED, (payload) => {
+  emitToUser(payload.userId, "interview:started", {
+    sessionId: payload.sessionId,
+    jobId: payload.jobId,
+  });
+});
+
+eventBus.on(Events.INTERVIEW_COMPLETED, (payload) => {
+  emitToUser(payload.userId, "interview:completed", {
+    sessionId: payload.sessionId,
+    overallScore: payload.overallScore,
+    codingScore: payload.codingScore,
+    oralScore: payload.oralScore,
+  });
+});
+
+eventBus.on(Events.CODE_SUBMITTED, (payload) => {
+  emitToUser(payload.userId, "interview:code:result", {
+    sessionId: payload.sessionId,
+    submissionId: payload.submissionId,
+    passed: payload.passed,
+    score: payload.score,
   });
 });
 

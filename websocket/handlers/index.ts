@@ -1,5 +1,6 @@
 import { Server, Socket } from "socket.io";
 import logger from "../../shared/logger/logger";
+import { registerInterviewHandlers } from "./interview.handler";
 
 export const registerHandlers = (io: Server, socket: Socket): void => {
   socket.on("subscribe:job", (jobId: string) => {
@@ -23,4 +24,6 @@ export const registerHandlers = (io: Server, socket: Socket): void => {
   socket.on("ping", (cb: any) => {
     if (typeof cb === "function") cb({ ok: true });
   });
+
+  registerInterviewHandlers(io, socket);
 };

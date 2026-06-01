@@ -47,6 +47,14 @@ export const config = {
     fileSize: 5 * 1024 * 1024,
     otpTtl: 300,
   },
+
+  docker: {
+    socketPath: process.env.DOCKER_SOCKET || "/var/run/docker.sock",
+    memoryLimit: 256 * 1024 * 1024,
+    cpuQuota: 50000,
+    cpuPeriod: 100000,
+    execTimeout: 30000,
+  },
 } as const;
 
 export type Config = typeof config;

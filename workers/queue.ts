@@ -7,6 +7,7 @@ export enum QueueNames {
   NOTIFICATION = "notification",
   FILE_PROCESSING = "file-processing",
   RESUME_PROCESSING = "resume-processing",
+  INTERVIEW = "interview",
 }
 
 export const emailQueue = new Queue(QueueNames.EMAIL, {
@@ -64,9 +65,20 @@ export const createWorker = (
   return worker;
 };
 
+export const interviewQueue = new Queue(QueueNames.INTERVIEW, {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: "exponential", delay: 3000 },
+    removeOnComplete: { age: 3600 },
+    removeOnFail: { age: 86400 },
+  },
+});
+
 export const closeAllQueues = async (): Promise<void> => {
   await emailQueue.close();
   await notificationQueue.close();
   await fileProcessingQueue.close();
   await resumeQueue.close();
+  await interviewQueue.close();
 };

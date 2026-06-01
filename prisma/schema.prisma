@@ -40,6 +40,7 @@ model User {
   resumes         ResumeProfile[]
   gitHubProfile   GitHubProfile?
   candidateMatches CandidateMatch[]
+  interviewSessions InterviewSession[]
   createdAt       DateTime         @default(now())
 }
 
@@ -53,6 +54,7 @@ model Job {
   applications    Application[]
   skills          Skill[]           @relation("JobSkills")
   candidateMatches CandidateMatch[]
+  interviewSessions InterviewSession[]
   createdAt       DateTime          @default(now())
 }
 
@@ -69,6 +71,7 @@ model Application {
   interviewScore  InterviewScore?
   behavioralScore BehavioralScore?
   candidateMatch  CandidateMatch?
+  interviewSessions InterviewSession[]
 
   @@unique([jobId, userId])
 }
@@ -208,4 +211,116 @@ model CandidateMatch {
   @@index([jobId])
   @@index([userId])
   @@index([overallScore])
+}
+
+enum InterviewPhase {
+  GREETING
+  CODING
+  ORAL
+  EVALUATION
+  COMPLETED
+}
+
+enum SubmissionStatus {
+  PENDING
+  RUNNING
+  PASSED
+  FAILED
+  ERROR
+}
+
+model InterviewSession {
+  id              String          @id @default(uuid())
+  applicationId   String          @unique
+  userId          String
+  jobId           String
+  phase           InterviewPhase  @default(GREETING)
+  status          String          @default("SCHEDULED")
+  codingPrompt    String?
+  starterCode     String?
+  language        String          @default("javascript")
+  timeLimit       Int             @default(3600)
+  timeRemaining   Int             @default(3600)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  codingScore     Float           @default(0)
+  oralScore       Float           @default(0)
+  overallScore    Float           @default(0)
+  transcript      Json            @default("[]")
+  metadata        Json            @default("{}")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  application  Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id])
+  job          Job                @relation(fields: [jobId], references: [id])
+  submissions  CodingSubmission[]
+  testResults  TestResult[]
+  questions    InterviewQuestion[]
+
+  @@index([applicationId])
+  @@index([userId])
+  @@index([jobId])
+  @@index([status])
+}
+
+model InterviewQuestion {
+  id             String   @id @default(uuid())
+  sessionId      String
+  type           String   @default("coding")
+  question       String
+  difficulty     String   @default("medium")
+  starterCode    String?
+  testCases      Json     @default("[]")
+  expectedOutput String?
+  hints          Json     @default("[]")
+  orderIndex     Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  session InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model CodingSubmission {
+  id            String           @id @default(uuid())
+  sessionId     String
+  questionId    String?
+  code          String
+  language      String           @default("javascript")
+  status        SubmissionStatus @default(PENDING)
+  output        String?
+  errorOutput   String?
+  testPassed    Int              @default(0)
+  testTotal     Int              @default(0)
+  score         Float            @default(0)
+  submittedAt   DateTime         @default(now())
+  executedAt    DateTime?
+  duration      Int?
+
+  session     InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  testResults TestResult[]
+
+  @@index([sessionId])
+}
+
+model TestResult {
+  id           String   @id @default(uuid())
+  submissionId String
+  sessionId    String
+  testIndex    Int
+  name         String?
+  passed       Boolean  @default(false)
+  input        String?
+  expected     String?
+  actual       String?
+  error        String?
+  duration     Int?
+  createdAt    DateTime @default(now())
+
+  submission CodingSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  session    InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@index([sessionId])
 }
