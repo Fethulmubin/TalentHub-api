@@ -1,5 +1,7 @@
 import Docker from "dockerode";
-import { Duplex } from "stream";
+import path from "path";
+import os from "os";
+import fs from "fs/promises";
 import logger from "../../shared/logger/logger";
 
 const docker = new Docker();
@@ -7,12 +9,42 @@ const docker = new Docker();
 const MEMORY_LIMIT = 256 * 1024 * 1024;
 const CPU_QUOTA = 50000;
 const CPU_PERIOD = 100000;
-const EXEC_TIMEOUT = 30000;
+const EXEC_TIMEOUT = 60000;
 
 interface ExecResult {
   output: string;
   error: string;
   timedOut: boolean;
+}
+
+const LANGUAGE_CONFIG: Record<string, { image: string; filename: string; cmd: string[] }> = {
+  javascript: { image: "node:18-alpine", filename: "/tmp/code.js", cmd: ["node", "/tmp/code.js"] },
+  typescript: { image: "node:18-alpine", filename: "/tmp/code.ts", cmd: ["sh", "-c", "cd /tmp && npx ts-node code.ts"] },
+  python: { image: "python:3.11-alpine", filename: "/tmp/code.py", cmd: ["python3", "/tmp/code.py"] },
+  java: { image: "openjdk:17-alpine", filename: "/tmp/Main.java", cmd: ["sh", "-c", "cd /tmp && javac Main.java && java Main"] },
+  cpp: { image: "gcc:13-alpine", filename: "/tmp/code.cpp", cmd: ["sh", "-c", "cd /tmp && g++ code.cpp -o code && ./code"] },
+  c: { image: "gcc:13-alpine", filename: "/tmp/code.c", cmd: ["sh", "-c", "cd /tmp && gcc code.c -o code && ./code"] },
+  go: { image: "golang:1.21-alpine", filename: "/tmp/code.go", cmd: ["go", "run", "/tmp/code.go"] },
+  rust: { image: "rust:1.73-alpine", filename: "/tmp/code.rs", cmd: ["sh", "-c", "cd /tmp && rustc code.rs -o code && ./code"] },
+  ruby: { image: "ruby:3.2-alpine", filename: "/tmp/code.rb", cmd: ["ruby", "/tmp/code.rb"] },
+};
+
+async function ensureImage(image: string): Promise<void> {
+  try {
+    await docker.getImage(image).inspect();
+  } catch {
+    logger.info(`Pulling Docker image: ${image}...`);
+    await new Promise<void>((resolve, reject) => {
+      docker.pull(image, {}, (err: Error | null, stream?: NodeJS.ReadableStream) => {
+        if (err) return reject(err);
+        if (!stream) return reject(new Error(`Failed to pull image: ${image}`));
+        docker.modem.followProgress(stream, (pullErr: Error | null) => {
+          if (pullErr) return reject(pullErr);
+          resolve();
+        });
+      });
+    });
+  }
 }
 
 export const executeCodeInDocker = async (
@@ -24,129 +56,162 @@ export const executeCodeInDocker = async (
   overallOutput: string;
   overallError: string;
 }> => {
-  const image = getImageForLanguage(language);
+  const cfg = LANGUAGE_CONFIG[language] || LANGUAGE_CONFIG["javascript"];
   const wrappedCode = wrapCode(code, language, testCases);
-  const container = await docker.createContainer({
-    Image: image,
-    Cmd: getCommand(language),
-    AttachStdout: true,
-    AttachStderr: true,
-    HostConfig: {
-      Memory: MEMORY_LIMIT,
-      MemorySwap: MEMORY_LIMIT,
-      CpuQuota: CPU_QUOTA,
-      CpuPeriod: CPU_PERIOD,
-      NetworkMode: "none",
-      ReadonlyRootfs: true,
-      AutoRemove: true,
-    },
-    OpenStdin: true,
-    StdinOnce: true,
-  });
+
+  await ensureImage(cfg.image);
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "talenthub-"));
+  const srcFile = path.join(tmpDir, path.basename(cfg.filename));
+  await fs.writeFile(srcFile, wrappedCode);
+
+  let container: Docker.Container | null = null;
 
   try {
-    const stream = await container.attach({
-      stream: true,
-      stdin: true,
-      stdout: true,
-      stderr: true,
+    container = await docker.createContainer({
+      Image: cfg.image,
+      Cmd: cfg.cmd,
+      WorkingDir: "/tmp",
+      HostConfig: {
+        Memory: MEMORY_LIMIT,
+        MemorySwap: MEMORY_LIMIT,
+        CpuQuota: CPU_QUOTA,
+        CpuPeriod: CPU_PERIOD,
+        NetworkMode: "none",
+        Binds: [`${tmpDir}:/tmp:ro`],
+      },
+      Tty: false,
+      OpenStdin: false,
     });
 
-    const result = await Promise.race([
-      pipeStream(stream, wrappedCode),
-      timeout(EXEC_TIMEOUT).then(() => ({ output: "", error: "Execution timed out", timedOut: true })),
+    const startTime = Date.now();
+
+    await container.start();
+
+    const waitResult = await Promise.race([
+      container.wait(),
+      timeout(EXEC_TIMEOUT),
     ]);
 
-    if (result.timedOut) {
-      try {
-        await container.kill();
-      } catch { }
+    const duration = Date.now() - startTime;
+
+    let timedOut = false;
+    if ("timedOut" in waitResult) {
+      timedOut = true;
+      try { await container.kill(); } catch { }
+    }
+
+    let stdout = "";
+    let stderr = "";
+    try {
+      const logs = await container.logs({ stdout: true, stderr: true });
+      const demuxed = demuxLogs(logs);
+      stdout = demuxed.stdout;
+      stderr = demuxed.stderr;
+    } catch (logErr: any) {
+      logger.warn("Failed to read container logs", { error: logErr.message });
+    }
+
+    if (timedOut) {
       return {
-        results: testCases.map((_, i) => ({
+        results: testCases.map((tc, i) => ({
           testIndex: i,
           passed: false,
           actual: "",
-          expected: testCases[i]?.expected,
-          error: "Execution timed out",
-          duration: EXEC_TIMEOUT,
+          expected: tc.expected,
+          error: "Execution timed out (30s)",
+          duration,
         })),
-        overallOutput: "",
-        overallError: "Execution timed out",
+        overallOutput: stdout,
+        overallError: "Execution timed out (30s)",
       };
     }
 
-    const { output, error } = result;
-    const results = parseTestResults(output, error, testCases);
-
-    return { results, overallOutput: output, overallError: error };
+    const results = parseTestResults(stdout, stderr, testCases);
+    return { results, overallOutput: stdout, overallError: stderr };
+  } catch (err: any) {
+    logger.error("Docker execution error", { error: err.message });
+    return {
+      results: testCases.map((tc, i) => ({
+        testIndex: i,
+        passed: false,
+        actual: "",
+        expected: tc.expected,
+        error: err.message,
+        duration: 0,
+      })),
+      overallOutput: "",
+      overallError: err.message,
+    };
   } finally {
-    try {
-      await container.remove({ force: true });
-    } catch { }
+    if (container) {
+      try { await container.remove({ force: true }); } catch { }
+    }
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
 };
 
-function getImageForLanguage(language: string): string {
-  const images: Record<string, string> = {
-    javascript: "node:18-alpine",
-    typescript: "node:18-alpine",
-    python: "python:3.11-alpine",
-    java: "openjdk:17-alpine",
-    cpp: "gcc:13-alpine",
-    c: "gcc:13-alpine",
-    go: "golang:1.21-alpine",
-    rust: "rust:1.73-alpine",
-    ruby: "ruby:3.2-alpine",
-  };
-  return images[language] || "node:18-alpine";
+function timeout(ms: number): Promise<{ timedOut: true }> {
+  return new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), ms));
 }
 
-function getCommand(language: string): string[] {
-  const commands: Record<string, string[]> = {
-    javascript: ["node", "/tmp/code.js"],
-    typescript: ["sh", "-c", "npx ts-node /tmp/code.ts"],
-    python: ["python3", "/tmp/code.py"],
-    java: ["sh", "-c", "javac /tmp/Main.java && java -cp /tmp Main"],
-    cpp: ["sh", "-c", "g++ /tmp/code.cpp -o /tmp/code && /tmp/code"],
-    c: ["sh", "-c", "gcc /tmp/code.c -o /tmp/code && /tmp/code"],
-    go: ["go", "run", "/tmp/code.go"],
-    rust: ["sh", "-c", "rustc /tmp/code.rs -o /tmp/code && /tmp/code"],
-    ruby: ["ruby", "/tmp/code.rb"],
-  };
-  return commands[language] || ["node", "/tmp/code.js"];
+function demuxLogs(buffer: Buffer): { stdout: string; stderr: string } {
+  let stdout = "";
+  let stderr = "";
+  let offset = 0;
+
+  while (offset < buffer.length) {
+    const streamType = buffer[offset];
+    const payloadLen = buffer.readUInt32BE(offset + 4);
+    offset += 8;
+    const payload = buffer.subarray(offset, offset + payloadLen).toString("utf-8");
+    if (streamType === 1) stdout += payload;
+    else if (streamType === 2) stderr += payload;
+    offset += payloadLen;
+  }
+
+  return { stdout, stderr };
 }
 
 function wrapCode(code: string, language: string, testCases: { input?: string; expected?: string }[]): string {
+  const wrap = (wrapped: string) => wrapped;
+
   if (language === "javascript" || language === "typescript") {
-    return `
+    return wrap(`
 ${code}
 
 const testCases = ${JSON.stringify(testCases)};
 testCases.forEach((tc, i) => {
   try {
-    const result = solution(tc.input);
-    const passed = String(result) === String(tc.expected);
-    console.log(\`[TEST_RESULT] index=\${i} passed=\${passed} actual=\${JSON.stringify(result)} expected=\${JSON.stringify(tc.expected)}\`);
+    const inputVal = tc.input !== undefined ? JSON.parse(tc.input) : undefined;
+    const result = solution(inputVal);
+    const actualStr = JSON.stringify(result);
+    const expectedStr = tc.expected !== undefined ? String(tc.expected) : undefined;
+    const passed = actualStr === expectedStr;
+    console.log(\`[TEST_RESULT] index=\${i} passed=\${passed} actual=\${actualStr} expected=\${tc.expected}\`);
   } catch (e) {
-    console.log(\`[TEST_RESULT] index=\${i} passed=false actual= error=\${e.message}\`);
+    console.log(\`[TEST_RESULT] index=\${i} passed=false actual="" error=\${(e).message}\`);
   }
 });
-`;
+`);
   }
   if (language === "python") {
-    return `
+    return wrap(`
 ${code}
 
 import json
 test_cases = ${JSON.stringify(testCases)}
 for i, tc in enumerate(test_cases):
     try:
-        result = solution(tc.get("input"))
-        passed = str(result) == str(tc.get("expected"))
-        print(f"[TEST_RESULT] index={i} passed={passed} actual={json.dumps(result)} expected={json.dumps(tc.get('expected'))}")
+        input_val = json.loads(tc.get("input")) if tc.get("input") is not None else None
+        result = solution(input_val)
+        actual_str = json.dumps(result)
+        expected_str = str(tc.get("expected"))
+        passed = actual_str == expected_str
+        print(f'[TEST_RESULT] index={i} passed={str(passed).lower()} actual={actual_str} expected={tc.get("expected")}')
     except Exception as e:
-        print(f"[TEST_RESULT] index={i} passed=False actual= error={str(e)}")
-`;
+        print(f'[TEST_RESULT] index={i} passed=false actual="" error={str(e)}')
+`);
   }
   return code;
 }
@@ -187,37 +252,4 @@ function parseTestResults(
   }
 
   return results;
-}
-
-function pipeStream(stream: NodeJS.ReadWriteStream, input: string): Promise<ExecResult> {
-  return new Promise((resolve, reject) => {
-    let output = "";
-    let error = "";
-
-    stream.write(input + "\n");
-
-    stream.on("data", (chunk: Buffer) => {
-      const text = chunk.toString("utf-8");
-      const clean = text.replace(/[^ -~\n\t]/g, "");
-      output += clean;
-    });
-
-    stream.on("error", (err: Error) => {
-      error += err.message;
-    });
-
-    (stream as any).on("end", () => {
-      (stream as any).destroy();
-      resolve({ output, error, timedOut: false });
-    });
-
-    setTimeout(() => {
-      (stream as any).destroy();
-      resolve({ output, error: "Stream timeout", timedOut: true });
-    }, EXEC_TIMEOUT);
-  });
-}
-
-function timeout(ms: number): Promise<{ output: string; error: string; timedOut: true }> {
-  return new Promise((resolve) => setTimeout(() => resolve({ output: "", error: "Execution timed out", timedOut: true }), ms));
 }

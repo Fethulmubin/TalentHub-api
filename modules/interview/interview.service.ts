@@ -11,6 +11,9 @@ import {
   SessionResponse,
   EvaluationResult,
 } from "./interview.dto";
+import { generateOralQuestions, generateCodingChallenge } from "../../services/ai/openrouter.service";
+import prisma from "../../shared/database/prisma";
+import { clearHistory } from "../../shared/memory/conversationMemory";
 
 const CHALLENGE_TEMPLATES = [
   {
@@ -171,8 +174,36 @@ export const startSession = async (sessionId: string) => {
     return { status: false as const, message: "Session not found" };
   }
 
-  const challenge = CHALLENGE_TEMPLATES[Math.floor(Math.random() * CHALLENGE_TEMPLATES.length)];
-  const oralQuestions = getRandomQuestions(ORAL_QUESTIONS, 3);
+  await clearHistory(sessionId);
+
+  let challenge = CHALLENGE_TEMPLATES[Math.floor(Math.random() * CHALLENGE_TEMPLATES.length)];
+  let oralQuestions: string[];
+
+  try {
+    const job = await prisma.job.findUnique({
+      where: { id: session.jobId },
+      include: { skills: true },
+    });
+    if (job) {
+      const jobContext = {
+        title: job.title,
+        description: job.description || "",
+        skills: (job.skills || []).map((s: any) => s.name || s.skill || "").join(", "),
+      };
+
+      const aiChallenge = await generateCodingChallenge(jobContext);
+      if (aiChallenge) {
+        challenge = aiChallenge;
+      }
+
+      const generated = await generateOralQuestions(3, jobContext);
+      oralQuestions = generated.length >= 3 ? generated : getRandomQuestions(ORAL_QUESTIONS, 3);
+    } else {
+      oralQuestions = getRandomQuestions(ORAL_QUESTIONS, 3);
+    }
+  } catch {
+    oralQuestions = getRandomQuestions(ORAL_QUESTIONS, 3);
+  }
 
   const updated = await interviewRepo.updateSession(sessionId, {
     phase: "CODING",

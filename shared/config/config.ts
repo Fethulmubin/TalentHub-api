@@ -58,7 +58,7 @@ export const config = {
 
   openrouter: {
     apiKey: process.env.OPENROUTER_API_KEY || "",
-    model: process.env.OPENROUTER_MODEL || "mistralai/mistral-7b-instruct:free",
+    model: process.env.OPENROUTER_MODEL || "openai/gpt-oss-20b:free",
   },
 } as const;
 
